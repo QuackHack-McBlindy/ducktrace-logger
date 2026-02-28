@@ -15,6 +15,7 @@ mod tests {
 
 use std::{
     env,
+    path::Path,
     fs::{OpenOptions, File},
     io::Write,
     sync::{OnceLock, Mutex},
@@ -25,10 +26,10 @@ use colored::*;
 
 static LOGGER: OnceLock<Mutex<DuckTraceLogger>> = OnceLock::new();
 
-
 struct DuckTraceLogger {
     level: LogLevel,
     log_file: Option<File>,
+    log_path: Option<String>,
     debug_mode: bool,
 }
 
@@ -42,29 +43,10 @@ enum LogLevel {
 }
 
 impl DuckTraceLogger {
-    fn log_config(&mut self) {
-        let log_path_display = match &self.log_file {
-            Some(_) => {
-                let log_path = env::var("DT_LOG_PATH").unwrap_or_else(|_| "~/.config/duckTrace".to_string());
-                let log_file = env::var("DT_LOG_FILE").unwrap_or_else(|_| "unknown-script.log".to_string());
-                format!("{}/{}", log_path, log_file)
-            }
-            None => "Logging to file disabled".to_string(),
-        };
-        let level_str = match self.level {
-            LogLevel::Debug => "DEBUG",
-            LogLevel::Info => "INFO",
-            LogLevel::Warning => "WARNING",
-            LogLevel::Error => "ERROR",
-            LogLevel::Critical => "CRITICAL",
-        };
-        self.log(LogLevel::Debug, &format!("Logger initialized: level={}, file={}, debug_mode={}", 
-            level_str, log_path_display, self.debug_mode));
-    }
-
-    fn new(level_str: Option<&str>) -> Self {
+    fn new(file_override: Option<&str>, level_override: Option<&str>) -> Self {
         let debug_mode = env::var("DEBUG").is_ok();
-        let level = match level_str {
+
+        let level = match level_override {
             Some(l) => Self::level_from_str(l),
             None => match env::var("DT_LOG_LEVEL")
                 .unwrap_or_else(|_| "INFO".to_string())
@@ -78,13 +60,62 @@ impl DuckTraceLogger {
                 _ => LogLevel::Info,
             },
         };
-        
-        let log_file = Self::setup_log_file();
-        let mut logger = Self { level, log_file, debug_mode };
+
+        let (log_file, log_path) = if let Some(path_str) = file_override {
+            let path = Path::new(path_str);
+            let dir = path
+                .parent()
+                .map(|p| p.to_string_lossy().into_owned())
+                .unwrap_or_else(|| {
+                    env::var("DT_LOG_PATH").unwrap_or_else(|_| {
+                        let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
+                        format!("{}/.config/duckTrace", home)
+                    })
+                });
+            let file = path
+                .file_name()
+                .map(|f| f.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "unknown-script.log".to_string());
+
+            Self::open_log_file(&dir, &file)
+        } else {
+            let dir = env::var("DT_LOG_PATH").unwrap_or_else(|_| {
+                let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
+                format!("{}/.config/duckTrace", home)
+            });
+            let file = env::var("DT_LOG_FILE").unwrap_or_else(|_| "unknown-script.log".to_string());
+
+            Self::open_log_file(&dir, &file)
+        };
+
+        let mut logger = Self {
+            level,
+            log_file,
+            log_path,
+            debug_mode,
+        };
         logger.log_config();
         logger
     }
-    
+
+    fn open_log_file(dir: &str, filename: &str) -> (Option<File>, Option<String>) {
+        if std::fs::create_dir_all(dir).is_err() {
+            return (None, None);
+        }
+
+        let full_path = Path::new(dir).join(filename);
+        let path_str = full_path.to_string_lossy().into_owned();
+
+        match OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&full_path)
+        {
+            Ok(file) => (Some(file), Some(path_str)),
+            Err(_) => (None, None),
+        }
+    }
+
     fn level_from_str(s: &str) -> LogLevel {
         match s.to_uppercase().as_str() {
             "DEBUG" => LogLevel::Debug,
@@ -95,36 +126,36 @@ impl DuckTraceLogger {
             _ => LogLevel::Info,
         }
     }
-    
 
-    fn setup_log_file() -> Option<File> {
-        let log_path = env::var("DT_LOG_PATH")
-            .unwrap_or_else(|_| {
-                let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
-                format!("{}/.config/duckTrace", home)
-            });
-
-        std::fs::create_dir_all(&log_path).ok()?;
-
-        let log_filename = env::var("DT_LOG_FILE")
-            .unwrap_or_else(|_| "unknown-script.log".to_string());
-
-        let full_path = std::path::Path::new(&log_path).join(log_filename);
-
-        OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&full_path)
-            .ok()
+    fn log_config(&mut self) {
+        let log_path_display = self
+            .log_path
+            .as_ref()
+            .map(|p| p.as_str())
+            .unwrap_or("Logging to file disabled");
+        let level_str = match self.level {
+            LogLevel::Debug => "DEBUG",
+            LogLevel::Info => "INFO",
+            LogLevel::Warning => "WARNING",
+            LogLevel::Error => "ERROR",
+            LogLevel::Critical => "CRITICAL",
+        };
+        self.log(
+            LogLevel::Debug,
+            &format!(
+                "Logger initialized: level={}, file={}, debug_mode={}",
+                level_str, log_path_display, self.debug_mode
+            ),
+        );
     }
-    
+
     fn should_log(&self, msg_level: LogLevel) -> bool {
         if msg_level == LogLevel::Debug && !self.debug_mode {
             return false;
         }
         msg_level >= self.level
     }
-    
+
     fn get_symbol(&self, level: LogLevel) -> &'static str {
         match level {
             LogLevel::Debug => "⁉️",
@@ -134,7 +165,7 @@ impl DuckTraceLogger {
             LogLevel::Critical => "🚨",
         }
     }
-    
+
     fn format_message(&self, level: LogLevel, message: &str) -> String {
         let timestamp = Local::now().format("%H:%M:%S");
         let symbol = self.get_symbol(level);
@@ -145,11 +176,13 @@ impl DuckTraceLogger {
             LogLevel::Error => "ERROR",
             LogLevel::Critical => "CRITICAL",
         };
-        
-        format!("[🦆📜] [{}] {}{}{} ⮞ {}", 
-            timestamp, symbol, level_str, symbol, message)
+
+        format!(
+            "[🦆📜] [{}] {}{}{} ⮞ {}",
+            timestamp, symbol, level_str, symbol, message
+        )
     }
-    
+
     fn colorize_console(&self, level: LogLevel, formatted_msg: &str) -> String {
         match level {
             LogLevel::Debug => formatted_msg.blue().bold().to_string(),
@@ -159,34 +192,33 @@ impl DuckTraceLogger {
             LogLevel::Critical => formatted_msg.red().bold().blink().to_string(),
         }
     }
-    
+
     fn add_duck_say(&self, level: LogLevel, message: &str) -> String {
         if matches!(level, LogLevel::Error | LogLevel::Critical) {
-            let duck_say = format!(
+            format!(
                 "\n\x1b[3m\x1b[38;2;0;150;150m🦆 duck say \x1b[1m\x1b[38;2;255;255;0m⮞\x1b[0m\x1b[3m\x1b[38;2;0;150;150m fuck ❌ {}\x1b[0m",
                 message
-            );
-            duck_say
+            )
         } else {
             String::new()
         }
     }
-    
+
     pub fn log(&mut self, level: LogLevel, message: &str) {
         if !self.should_log(level) {
             return;
         }
-        
+
         let formatted = self.format_message(level, message);
         let console_output = self.colorize_console(level, &formatted);
-        
+
         eprintln!("{}", console_output);
-        
+
         if matches!(level, LogLevel::Error | LogLevel::Critical) {
             let duck_say = self.add_duck_say(level, message);
             eprintln!("{}", duck_say);
         }
-        
+
         if let Some(file) = &mut self.log_file {
             let timestamp = Local::now().format("%H:%M:%S");
             let level_str = match level {
@@ -196,7 +228,7 @@ impl DuckTraceLogger {
                 LogLevel::Error => "ERROR",
                 LogLevel::Critical => "CRITICAL",
             };
-            
+
             let file_msg = format!("[{}] {} - {}\n", timestamp, level_str, message);
             let _ = writeln!(file, "{}", file_msg);
         }
@@ -207,7 +239,7 @@ fn with_logger<F>(level: LogLevel, msg: &str, f: F)
 where
     F: FnOnce(&mut DuckTraceLogger, LogLevel, &str),
 {
-    let logger = LOGGER.get_or_init(|| Mutex::new(DuckTraceLogger::new(None)));
+    let logger = LOGGER.get_or_init(|| Mutex::new(DuckTraceLogger::new(None, None)));
     let mut guard = logger.lock().unwrap();
     f(&mut guard, level, msg);
 }
@@ -224,7 +256,6 @@ pub fn dt_warning(msg: &str) {
     with_logger(LogLevel::Warning, msg, |logger, lvl, m| logger.log(lvl, m));
 }
 
-
 pub fn dt_error(msg: &str) {
     with_logger(LogLevel::Error, msg, |logger, lvl, m| logger.log(lvl, m));
 }
@@ -233,9 +264,8 @@ pub fn dt_critical(msg: &str) {
     with_logger(LogLevel::Critical, msg, |logger, lvl, m| logger.log(lvl, m));
 }
 
-
-pub fn dt_setup(_log_name: Option<&str>, level: Option<&str>) {
-    let _ = LOGGER.get_or_init(|| Mutex::new(DuckTraceLogger::new(level)));
+pub fn dt_setup(file_override: Option<&str>, level_override: Option<&str>) {
+    let _ = LOGGER.get_or_init(|| Mutex::new(DuckTraceLogger::new(file_override, level_override)));
 }
 
 pub struct DtTimer {
@@ -251,22 +281,32 @@ impl DtTimer {
             start_time: Instant::now(),
         }
     }
-    
+
     pub fn lap(&self, lap_name: &str) {
         let elapsed = self.start_time.elapsed().as_secs_f64();
         dt_debug(&format!("{} - {}: {:.3}s", self.operation_name, lap_name, elapsed));
     }
-    
+
     pub fn complete(self) {
         let elapsed = self.start_time.elapsed().as_secs_f64();
         dt_debug(&format!("Completed {} in {:.3}s", self.operation_name, elapsed));
     }
-
 }
 
-// Shortcut / Alias
 pub fn dt_timer(name: &str) -> DtTimer {
     DtTimer::new(name)
+}
+
+pub fn dt_duck_say(message: &str) {
+    let teal = Color::TrueColor { r: 0, g: 150, b: 150 };
+    let yellow = Color::TrueColor { r: 255, g: 255, b: 0 };
+
+    eprintln!(
+        "{}{} {}",
+        "🦆 duck say ".italic().color(teal),
+        "⮞".bold().color(yellow),
+        message.italic().color(teal)
+    );
 }
 
 #[macro_export]
@@ -285,5 +325,47 @@ macro_rules! duck_log {
     };
     (critical: $($arg:tt)*) => {
         $crate::dt_critical(&format!($($arg)*));
+    };
+}
+
+#[macro_export]
+macro_rules! dt_debug {
+    ($($arg:tt)*) => {
+        $crate::dt_debug(&format!($($arg)*));
+    };
+}
+
+#[macro_export]
+macro_rules! dt_info {
+    ($($arg:tt)*) => {
+        $crate::dt_info(&format!($($arg)*));
+    };
+}
+
+#[macro_export]
+macro_rules! dt_warning {
+    ($($arg:tt)*) => {
+        $crate::dt_warning(&format!($($arg)*));
+    };
+}
+
+#[macro_export]
+macro_rules! dt_error {
+    ($($arg:tt)*) => {
+        $crate::dt_error(&format!($($arg)*));
+    };
+}
+
+#[macro_export]
+macro_rules! dt_critical {
+    ($($arg:tt)*) => {
+        $crate::dt_critical(&format!($($arg)*));
+    };
+}
+
+#[macro_export]
+macro_rules! duck_say {
+    ($($arg:tt)*) => {
+        $crate::dt_say(&format!($($arg)*));
     };
 }

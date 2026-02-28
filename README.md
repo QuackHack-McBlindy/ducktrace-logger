@@ -40,10 +40,26 @@ If you need to set the log level from code (ignoring env vars), call `setup_duck
 use ducktrace_logger::*;
 
 fn main() {
-    // Must come first!
+    // Option 1: Use environment variables (DT_LOG_PATH, DT_LOG_FILE, DT_LOG_LEVEL)
+    //dt_setup(None, None);
+    // Above is same as:
+    dt_info("Skipping setup uses env vars");
+
+    // Option 2: Override only the log file (uses default directory if no path given)
+    dt_setup(Some("myapp.log"), None);
+
+    // Option 3: Override only the log level
     dt_setup(None, Some("DEBUG"));
-    
-    dt_info("This will now show debug messages if DEBUG mode is on");
+
+    // Option 4: Override both file and level
+    dt_setup(Some("/var/log/myapp.log"), Some("ERROR"));
+
+    dt_debug("This is a quackin' debuggin' message!");
+    // Arguments can be passed:
+    dt_debug!("Example: {} <-- there", example_id);
+    // That works for all log levels
+    dt_info!("Example: {} <-- there", example_id);    
+    // ...    
 }
 ```
 
@@ -88,4 +104,4 @@ This will print to stderr:
 ```
 
   
-The duck line is only shown for Error and Critical levels – it does not appear for Debug, Info, or Warning. It is also not written to the log file, only to the console.  
+The duck line is only shown for Error and Critical levels – it does not appear for Debug, Info, or Warning. It is also not written to the log file, only to the console. 
