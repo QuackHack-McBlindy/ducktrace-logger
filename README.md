@@ -3,7 +3,7 @@
   
 `ducktrace-logger` is a duck themed application logging system written in Rust that is configured using environment variables.  
 It only prints (and saves to `~/.config/duckTrace/`) logs at or above `$DT_LOG_LEVEL`.  
-It also provides a handy `PerfTimer` for measuring operations.  
+It also provides a handy `dt_timer` for measuring operations.  
   
 
 ## Installation
@@ -37,11 +37,11 @@ If you need to set the log level from code (ignoring env vars), call `setup_duck
   
 
 ```rust
-use ducktrace_logger::{setup_ducktrace_logging, dt_info};
+use ducktrace_logger::*;
 
 fn main() {
     // Must come first!
-    setup_ducktrace_logging(None, Some("DEBUG"));
+    dt_setup(None, Some("DEBUG"));
     
     dt_info("This will now show debug messages if DEBUG mode is on");
 }
@@ -51,17 +51,13 @@ fn main() {
 ## **Basic usage:**
 
 ```rust
-use ducktrace_logger::{
-    dt_debug,
-    dt_info,
-    PerfTimer,
-};
+use ducktrace_logger::*;
 
 fn main() {
     dt_info("Application started");
     dt_debug("Some debugging message");
 
-    let timer = PerfTimer::new("Heavy computation");
+    let timer = dt_timer("my operation");
     // ... do work ...
     timer.lap("first phase");
     // ... more work ...
@@ -75,7 +71,7 @@ fn main() {
   
   
 ```rust
-use ducktrace_logger::dt_error;
+use ducktrace_logger::*;
 
 fn main() {
     dt_error("The database connection failed");

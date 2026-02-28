@@ -42,6 +42,26 @@ enum LogLevel {
 }
 
 impl DuckTraceLogger {
+    fn log_config(&mut self) {
+        let log_path_display = match &self.log_file {
+            Some(_) => {
+                let log_path = env::var("DT_LOG_PATH").unwrap_or_else(|_| "~/.config/duckTrace".to_string());
+                let log_file = env::var("DT_LOG_FILE").unwrap_or_else(|_| "unknown-script.log".to_string());
+                format!("{}/{}", log_path, log_file)
+            }
+            None => "Logging to file disabled".to_string(),
+        };
+        let level_str = match self.level {
+            LogLevel::Debug => "DEBUG",
+            LogLevel::Info => "INFO",
+            LogLevel::Warning => "WARNING",
+            LogLevel::Error => "ERROR",
+            LogLevel::Critical => "CRITICAL",
+        };
+        self.log(LogLevel::Debug, &format!("Logger initialized: level={}, file={}, debug_mode={}", 
+            level_str, log_path_display, self.debug_mode));
+    }
+
     fn new(level_str: Option<&str>) -> Self {
         let debug_mode = env::var("DEBUG").is_ok();
         let level = match level_str {
@@ -60,8 +80,9 @@ impl DuckTraceLogger {
         };
         
         let log_file = Self::setup_log_file();
-        
-        Self { level, log_file, debug_mode }
+        let mut logger = Self { level, log_file, debug_mode };
+        logger.log_config();
+        logger
     }
     
     fn level_from_str(s: &str) -> LogLevel {
@@ -213,16 +234,16 @@ pub fn dt_critical(msg: &str) {
 }
 
 
-pub fn setup_ducktrace_logging(_log_name: Option<&str>, level: Option<&str>) {
+pub fn dt_setup(_log_name: Option<&str>, level: Option<&str>) {
     let _ = LOGGER.get_or_init(|| Mutex::new(DuckTraceLogger::new(level)));
 }
 
-pub struct PerfTimer {
+pub struct DtTimer {
     operation_name: String,
     start_time: Instant,
 }
 
-impl PerfTimer {
+impl DtTimer {
     pub fn new(operation_name: &str) -> Self {
         dt_debug(&format!("Starting {}...", operation_name));
         Self {
@@ -240,6 +261,12 @@ impl PerfTimer {
         let elapsed = self.start_time.elapsed().as_secs_f64();
         dt_debug(&format!("Completed {} in {:.3}s", self.operation_name, elapsed));
     }
+
+}
+
+// Shortcut / Alias
+pub fn dt_timer(name: &str) -> DtTimer {
+    DtTimer::new(name)
 }
 
 #[macro_export]
@@ -260,5 +287,3 @@ macro_rules! duck_log {
         $crate::dt_critical(&format!($($arg)*));
     };
 }
-
-
