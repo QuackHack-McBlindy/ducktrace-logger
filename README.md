@@ -1,22 +1,29 @@
 # **ducktrace-logger**
 
-  
+
 `ducktrace-logger` is a duck themed application logging system written in Rust that is configured using environment variables.  
 It only prints (and saves to `~/.config/duckTrace/`) logs at or above `$DT_LOG_LEVEL`.  
 It also provides a handy `dt_timer` for measuring operations.  
-  
 
-## Installation
+
+- **🦆 Works seamlessly with:**
+  - [ducktrace-tui](https://github.com/quackhack-mcblindy/ducktrace-tui) *(TUI for browsing logs and managing services)* 
+
+
+<br>   
+
+## **Installation**
 
   
-Add as a git dependency in your `Cargo.toml`:  
+Add **ducktrace-logger** as a dependency in `Cargo.toml`.
 
 ```toml
 [dependencies]
-ducktrace-logger = { git = "https://github.com/QuackHack-McBlindy/ducktrace-logger" }
+ducktrace-logger = "0.1.3"
 ```
+  
 
-## Configuration
+## **Configuration**
 
 
 The logger can be configured via environment variables (preferred) or programmatically.  

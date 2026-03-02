@@ -9,11 +9,16 @@ new_patch=$((patch + 1))
 new_version="$major.$minor.$new_patch"
 echo "New version: $new_version"
 
-# Update Cargo.toml (macOS/BSD sed needs -i '', Linux -i)
+# Update Cargo.toml
 sed -i.bak "s/^version = \".*\"/version = \"$new_version\"/" Cargo.toml
 rm Cargo.toml.bak
 
-git add Cargo.toml
+# Update version in README.md
+sed -i.bak "s/ducktrace-logger = \".*\"/ducktrace-logger = \"$new_version\"/" README.md
+rm README.md.bak
+
+
+git add Cargo.toml README.md
 git commit -m "Bump version to $new_version"
 git tag "v$new_version"
 
