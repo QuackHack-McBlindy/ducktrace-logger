@@ -30,7 +30,6 @@ struct DuckTraceLogger {
     level: LogLevel,
     log_file: Option<File>,
     log_path: Option<String>,
-    debug_mode: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd)]
@@ -44,8 +43,6 @@ enum LogLevel {
 
 impl DuckTraceLogger {
     fn new(file_override: Option<&str>, level_override: Option<&str>) -> Self {
-        let debug_mode = env::var("DEBUG").is_ok();
-
         let level = match level_override {
             Some(l) => Self::level_from_str(l),
             None => match env::var("DT_LOG_LEVEL")
@@ -92,7 +89,6 @@ impl DuckTraceLogger {
             level,
             log_file,
             log_path,
-            debug_mode,
         };
         logger.log_config();
         logger
@@ -143,16 +139,13 @@ impl DuckTraceLogger {
         self.log(
             LogLevel::Debug,
             &format!(
-                "Logger initialized: level={}, file={}, debug_mode={}",
-                level_str, log_path_display, self.debug_mode
+                "Logger initialized: level={}, file={}",
+                level_str, log_path_display
             ),
         );
     }
 
     fn should_log(&self, msg_level: LogLevel) -> bool {
-        if msg_level == LogLevel::Debug && !self.debug_mode {
-            return false;
-        }
         msg_level >= self.level
     }
 

@@ -19,7 +19,7 @@ Add **ducktrace-logger** as a dependency in `Cargo.toml`.
 
 ```toml
 [dependencies]
-ducktrace-logger = "0.1.3"
+ducktrace-logger = "0.1.4"
 ```
   
 
@@ -32,7 +32,6 @@ The logger can be configured via environment variables (preferred) or programmat
 ### Environment variables (easiest)  
 
 - `DT_LOG_LEVEL` – set to `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL` (default: `INFO`)
-- `DEBUG=1` – enable debug messages even if level is higher
 - `DT_LOG_PATH` – directory for log files (default: `~/.config/duckTrace/`)
 - `DT_LOG_FILE` – filename inside that directory (default: `unknown-script.log`)
   

@@ -25,4 +25,6 @@ git tag "v$new_version"
 # Push to origin (main branch)
 git push origin main --tags
 
+cargo publish
+
 echo "Released version $new_version"

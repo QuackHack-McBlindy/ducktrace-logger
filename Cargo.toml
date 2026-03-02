@@ -1,6 +1,6 @@
 [package]
 name = "ducktrace-logger"
-version = "0.1.3"
+version = "0.1.4"
 authors = ["QuackHack-McBlindy"]
 license = "MIT"
 description = "A duck‑themed application logging system for Rust"
